@@ -15,33 +15,31 @@ def mass_matrix_fn(q, n_dof, shape, activation, epsilon, shift):
     # Calculate the indices of the off-diagonal elements of L:
     idx_tril = np.setdiff1d(np.arange(n_output), idx_diag)
 
-    # Indexing for concatenation of l_diagonal  and l_off_diagonal
+    # Indexing for concatenation of l_diagonal and l_off_diagonal
     cat_idx = np.hstack((idx_diag, idx_tril))
     idx = np.arange(cat_idx.size)[np.argsort(cat_idx)]
 
     # Compute Matrix Indices
     mat_idx = np.tril_indices(n_dof)
-    mat_idx = jax.numpy.ndarray.at[..., mat_idx[0], mat_idx[1]]
 
     # Compute Mass Matrix
     net = hk.nets.MLP(
-        output_sizes= shape + (n_output,),
+        output_sizes=shape + (n_output,),
         activation=activation,
         name="mass_matrix"
     )
 
     # Apply feature transform:
     z = jnp.concatenate([jnp.cos(q), jnp.sin(q)], axis=-1)
-    l_diagonal, l_off_diagonal = jnp.split(net(z), [n_dof,], axis=-1)
+    l_diagonal, l_off_diagonal = jnp.split(net(z), [n_dof], axis=-1)
 
     # Ensure positive diagonal:
-    # l_diagonal = jax.nn.softplus(l_diagonal) + epsilon
     l_diagonal = jax.nn.softplus(l_diagonal + shift) + epsilon
 
     vec_lower_triangular = jnp.concatenate((l_diagonal, l_off_diagonal), axis=-1)[..., idx]
 
     triangular_mat = jnp.zeros((n_dof, n_dof))
-    triangular_mat = jax.numpy.ndarray.at(triangular_mat, mat_idx, vec_lower_triangular[:])
+    triangular_mat = triangular_mat.at[mat_idx].set(vec_lower_triangular)
 
     mass_mat = jnp.matmul(triangular_mat, triangular_mat.transpose())
     return mass_mat
