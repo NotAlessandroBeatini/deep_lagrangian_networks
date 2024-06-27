@@ -21,7 +21,7 @@ def mass_matrix_fn(q, n_dof, shape, activation, epsilon, shift):
 
     # Compute Matrix Indices
     mat_idx = np.tril_indices(n_dof)
-    mat_idx = jax.ops.index[..., mat_idx[0], mat_idx[1]]
+    mat_idx = jax.numpy.ndarray.at[..., mat_idx[0], mat_idx[1]]
 
     # Compute Mass Matrix
     net = hk.nets.MLP(
@@ -41,7 +41,7 @@ def mass_matrix_fn(q, n_dof, shape, activation, epsilon, shift):
     vec_lower_triangular = jnp.concatenate((l_diagonal, l_off_diagonal), axis=-1)[..., idx]
 
     triangular_mat = jnp.zeros((n_dof, n_dof))
-    triangular_mat = jax.ops.index_update(triangular_mat, mat_idx, vec_lower_triangular[:])
+    triangular_mat = jax.numpy.ndarray.at(triangular_mat, mat_idx, vec_lower_triangular[:])
 
     mass_mat = jnp.matmul(triangular_mat, triangular_mat.transpose())
     return mass_mat
