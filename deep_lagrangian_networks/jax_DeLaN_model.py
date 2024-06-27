@@ -4,6 +4,46 @@ import haiku as hk
 import numpy as np
 
 
+def damping_matrix_fn(q, n_dof, shape, activation, epsilon, shift):
+    assert n_dof > 0
+    n_output = int((n_dof ** 2 + n_dof) / 2)
+
+    # Calculate the indices of the diagonal elements of L:
+    idx_diag = np.arange(n_dof, dtype=int) + 1
+    idx_diag = (idx_diag * (idx_diag + 1) / 2 - 1).astype(int)
+
+    # Calculate the indices of the off-diagonal elements of L:
+    idx_tril = np.setdiff1d(np.arange(n_output), idx_diag)
+
+    # Indexing for concatenation of l_diagonal and l_off_diagonal
+    cat_idx = np.hstack((idx_diag, idx_tril))
+    idx = np.arange(cat_idx.size)[np.argsort(cat_idx)]
+
+    # Compute Matrix Indices
+    mat_idx = np.tril_indices(n_dof)
+
+    # Compute Damping Matrix
+    net = hk.nets.MLP(
+        output_sizes=shape + (n_output,),
+        activation=activation,
+        name="damping_matrix"
+    )
+
+    # Apply feature transform:
+    z = jnp.concatenate([jnp.cos(q), jnp.sin(q)], axis=-1)
+    l_diagonal, l_off_diagonal = jnp.split(net(z), [n_dof], axis=-1)
+
+    # Ensure positive diagonal:
+    l_diagonal = jax.nn.softplus(l_diagonal + shift) + epsilon
+
+    vec_lower_triangular = jnp.concatenate((l_diagonal, l_off_diagonal), axis=-1)[..., idx]
+
+    triangular_mat = jnp.zeros((n_dof, n_dof))
+    triangular_mat = triangular_mat.at[mat_idx].set(vec_lower_triangular)
+
+    damping_mat = jnp.matmul(triangular_mat, triangular_mat.transpose())
+    return damping_mat
+
 def mass_matrix_fn(q, n_dof, shape, activation, epsilon, shift):
     assert n_dof > 0
     n_output = int((n_dof ** 2 + n_dof) / 2)
